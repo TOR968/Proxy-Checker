@@ -78,7 +78,7 @@ You can also specify the path to the configuration file:
 python config_editor.py -c my_config.json
 ```
 
-або
+or
 
 ```
 node config_editor.js -c my_config.json
