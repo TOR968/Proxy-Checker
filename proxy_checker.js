@@ -133,6 +133,8 @@ async function checkProxy(proxyUrl) {
             return await checkHttpProxy(proxyUrl);
         } else if (proxyUrl.startsWith("socks4://") || proxyUrl.startsWith("socks5://")) {
             return await checkSocksProxy(proxyUrl);
+        } else {
+            return await checkHttpProxy("http://" + proxyUrl);
         }
         return false;
     } catch (error) {

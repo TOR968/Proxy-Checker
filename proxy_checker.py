@@ -83,7 +83,7 @@ async def check_proxy(proxy_url):
                 port=port
             )
         else:
-            return False
+            connector = ProxyConnector.from_url("http://" + proxy_url)
         
         timeout = aiohttp.ClientTimeout(total=TIMEOUT)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
