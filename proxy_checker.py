@@ -6,7 +6,7 @@ import aiohttp
 import aiofiles
 import json
 import argparse
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from aiohttp_socks import ProxyConnector, ProxyType
 
 DEFAULT_CONFIG_FILE = 'config.json'
@@ -61,35 +61,96 @@ def read_proxies_from_file(file_path):
         print(f"Error reading file: {e}")
         return []
 
-async def check_proxy(proxy_url):
+def parse_proxy_string(proxy_str):
+    """Parse proxy string in different formats"""
+    protocol = "http"
+    username = None
+    password = None
+    host = None
+    port = None
+
+    # First check if protocol is present
+    if "://" in proxy_str:
+        protocol, proxy_str = proxy_str.split("://", 1)
+
+    # Check format with @
+    if "@" in proxy_str:
+        auth, hostport = proxy_str.rsplit("@", 1)
+        username, password = auth.split(":", 1)
+        host, port = hostport.split(":", 1)
+    else:
+        # Check format ip:port:username:password
+        parts = proxy_str.split(":")
+        if len(parts) == 4:
+            host, port, username, password = parts
+        else:
+            host, port = parts[0:2]
+
+    return {
+        "protocol": protocol.lower(),
+        "host": host,
+        "port": int(port),
+        "username": username,
+        "password": password
+    }
+
+async def check_proxy(proxy_str):
     try:
-        parsed = urlparse(proxy_url)
-        proxy_type = parsed.scheme
-        host = parsed.hostname
-        port = parsed.port
+        proxy_info = parse_proxy_string(proxy_str)
+        protocol = proxy_info["protocol"]
+        host = proxy_info["host"]
+        port = proxy_info["port"]
+        username = proxy_info["username"]
+        password = proxy_info["password"]
         
-        if proxy_type == 'http' or proxy_type == 'https':
+        # Form proxy URL with authentication
+        proxy_auth = f"{username}:{password}@" if username and password else ""
+        proxy_url = f"{protocol}://{proxy_auth}{host}:{port}"
+        
+        if protocol in ["http", "https"]:
             connector = ProxyConnector.from_url(proxy_url)
-        elif proxy_type == 'socks4':
+        elif protocol == "socks4":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS4,
                 host=host,
-                port=port
+                port=port,
+                username=username,
+                password=password
             )
-        elif proxy_type == 'socks5':
+        elif protocol == "socks5":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS5,
                 host=host,
-                port=port
+                port=port,
+                username=username,
+                password=password
             )
         else:
-            connector = ProxyConnector.from_url("http://" + proxy_url)
+            print(f"❌ Not working: {proxy_str} (Unsupported protocol: {protocol})")
+            return False
         
         timeout = aiohttp.ClientTimeout(total=TIMEOUT)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.get(TEST_URL) as response:
-                return response.status >= 200 and response.status < 300
-    except:
+                if response.status >= 200 and response.status < 300:
+                    return True
+                else:
+                    print(f"❌ Not working: {proxy_str} (HTTP {response.status})")
+                    return False
+    except aiohttp.ClientError as e:
+        error_msg = str(e)
+        if "Couldn't connect to proxy" in error_msg:
+            print(f"❌ Not working: {proxy_str} (Connection failed)")
+        elif "Invalid proxy response" in error_msg:
+            print(f"❌ Not working: {proxy_str} (Invalid response)")
+        else:
+            print(f"❌ Not working: {proxy_str} (Client error: {error_msg})")
+        return False
+    except asyncio.TimeoutError:
+        print(f"❌ Not working: {proxy_str} (Timeout)")
+        return False
+    except Exception as e:
+        print(f"❌ Not working: {proxy_str} (Error: {str(e)})")
         return False
 
 async def process_proxies(proxies):
@@ -115,10 +176,8 @@ async def process_proxies(proxies):
                 print(f"Progress: {processed_count}/{total_proxies} ({round(processed_count/total_proxies*100)}%)")
             
             if is_working:
-                print(f"✅ It works: {proxy}")
+                print(f"✅ Working: {proxy}")
                 working_proxies.append(proxy)
-            else:
-                print(f"❌ Not working: {proxy}")
     
     return working_proxies
 

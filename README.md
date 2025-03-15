@@ -2,16 +2,16 @@
 
 A tool for checking proxy server performance.
 
-## Description.
+## Description
 
-This program checks the list of proxy servers for functionality and saves working proxies to a separate file. HTTP, HTTPS, SOCKS4 and SOCKS5 proxies are supported.
+This program checks the list of proxy servers for functionality and saves working proxies to a separate file. It supports HTTP, HTTPS, SOCKS4 and SOCKS5 proxies with and without authentication.
 
 ## Versions
 
 The program is available in two versions:
 
-- Python (proxy_checker.py)
-- JavaScript (proxy_checker.js)
+-   Python (proxy_checker.py)
+-   JavaScript (proxy_checker.js)
 
 Both versions use the same configuration file `config.json`.
 
@@ -37,19 +37,67 @@ pip install -r requirements.txt
 ### For the JavaScript version:
 
 -   Node.js 12+
--   Installed packages: socks
+-   Installed packages: socks, https-proxy-agent, socks-proxy-agent, node-fetch
 
 Installation of dependencies:
 
 ```
-npm install socks
+npm install
 ```
 
 ## Usage
 
+### Quick Start
+
+For easy startup, you can use the run scripts:
+
+#### Windows
+
+```
+run.bat
+```
+
+or just double-click on `run.bat`
+
+#### Linux/MacOS
+
+```
+chmod +x run.sh  # Only needed first time
+./run.sh
+```
+
+These scripts will:
+
+1. Ask you to choose between Python and JavaScript versions
+2. Install all necessary dependencies
+3. Run the selected version of the program
+
 ### Preparation of the proxy file
 
-Create a file `proxy.txt` (or specify another file in the configuration) with proxies in the format:
+Create a file `proxy.txt` (or specify another file in the configuration) with proxies. The following formats are supported:
+
+1. With protocol and authentication:
+
+```
+http://username:password@ip:port
+https://username:password@ip:port
+socks4://username:password@ip:port
+socks5://username:password@ip:port
+```
+
+2. Without protocol, but with authentication:
+
+```
+username:password@ip:port
+```
+
+3. In the format IP:PORT:USERNAME:PASSWORD:
+
+```
+ip:port:username:password
+```
+
+4. Standard format without authentication:
 
 ```
 http://ip:port
@@ -58,7 +106,7 @@ socks4://ip:port
 socks5://ip:port
 ```
 
-### Configuration setup
+### Configuration settings
 
 To edit the configuration, run:
 
@@ -86,16 +134,16 @@ node config_editor.js -c my_config.json
 
 Configuration parameters:
 
--   `proxy_file` - path to the proxy file
--   `output_file` - path to the file for saving working proxies
+-   `proxy_file` - path to the file with proxies
+-   `output_file` - path to the file to save working proxies
 -   `test_url` - URL for testing proxies
 -   `timeout` - timeout in seconds for checking proxies
 -   `concurrent_checks` - number of concurrent checks
--   `save_to_input_file` - whether to save working proxies back to the input file (true/false)
+-   `save_to_input_file` - save working proxies back to the input file (true/false)
 
 ### Running proxy check
 
-To run the proxy check, execute:
+To run the proxy check manually, execute:
 
 ```
 python proxy_checker.py
@@ -128,4 +176,7 @@ node proxy_checker.js -c my_config.json
 -   `config.json` - configuration file
 -   `proxy.txt` - file with proxies for checking
 -   `working_proxies.txt` - file with working proxies (result of the program)
--   `requirements.txt` - file with dependencies for the Python version
+-   `requirements.txt` - file with dependencies for Python version
+-   `package.json` - file with dependencies for JavaScript version
+-   `run.bat` - startup script for Windows
+-   `run.sh` - startup script for Linux/MacOS

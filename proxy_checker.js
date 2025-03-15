@@ -1,9 +1,7 @@
 const fs = require("fs");
-const http = require("http");
-const https = require("https");
-const { SocksClient } = require("socks");
-const { URL } = require("url");
-const path = require("path");
+const fetch = require("node-fetch");
+const { HttpsProxyAgent } = require("https-proxy-agent");
+const { SocksProxyAgent } = require("socks-proxy-agent");
 
 function loadConfig(configPath = "config.json") {
     try {
@@ -20,6 +18,46 @@ function loadConfig(configPath = "config.json") {
             save_to_input_file: false,
         };
     }
+}
+
+function parseProxyString(proxyStr) {
+    let protocol = "http";
+    let username = "";
+    let password = "";
+    let host = "";
+    let port = "";
+
+    // Перевіряємо, чи є протокол
+    if (proxyStr.includes("://")) {
+        [protocol, proxyStr] = proxyStr.split("://");
+    }
+
+    // Якщо є @ - значить є автентифікація
+    if (proxyStr.includes("@")) {
+        const [auth, hostPort] = proxyStr.split("@");
+        [username, password] = auth.split(":");
+        [host, port] = hostPort.split(":");
+    } else if (proxyStr.includes(":")) {
+        // Формат без @ але з автентифікацією (ip:port:username:password)
+        const parts = proxyStr.split(":");
+        if (parts.length === 4) {
+            [host, port, username, password] = parts;
+        } else {
+            [host, port] = parts;
+        }
+    }
+
+    return {
+        protocol: protocol.toLowerCase(),
+        host,
+        port: parseInt(port),
+        username,
+        password,
+        toString() {
+            const auth = username && password ? `${username}:${password}@` : "";
+            return `${protocol}://${auth}${host}:${port}`;
+        },
+    };
 }
 
 function parseArgs() {
@@ -58,85 +96,60 @@ function readProxiesFromFile(filePath) {
     }
 }
 
-async function checkHttpProxy(proxyUrl) {
-    return new Promise((resolve) => {
+async function checkHttpProxy(proxyInfo) {
+    return new Promise(async (resolve) => {
         try {
-            const url = new URL(proxyUrl);
-            const options = {
-                host: url.hostname,
-                port: url.port,
-                path: TEST_URL,
+            const proxyUrl = proxyInfo.toString();
+            const agent = new HttpsProxyAgent(proxyUrl);
+
+            const response = await fetch(TEST_URL, {
+                agent,
+                timeout: TIMEOUT,
                 method: "HEAD",
-                timeout: TIMEOUT,
-            };
-
-            const req = http.request(options, (res) => {
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    resolve(true);
-                } else {
-                    resolve(false);
-                }
             });
 
-            req.on("error", () => {
-                resolve(false);
-            });
-
-            req.on("timeout", () => {
-                req.destroy();
-                resolve(false);
-            });
-
-            req.end();
+            resolve(response.ok);
         } catch (error) {
             resolve(false);
         }
     });
 }
 
-async function checkSocksProxy(proxyUrl) {
-    return new Promise((resolve) => {
+async function checkSocksProxy(proxyInfo) {
+    return new Promise(async (resolve) => {
         try {
-            const url = new URL(proxyUrl);
-            const socksVersion = proxyUrl.startsWith("socks5://") ? 5 : 4;
+            const proxyUrl = proxyInfo.toString();
+            const agent = new SocksProxyAgent(proxyUrl);
 
-            const options = {
-                proxy: {
-                    host: url.hostname,
-                    port: parseInt(url.port),
-                    type: socksVersion,
-                },
-                command: "connect",
-                destination: {
-                    host: new URL(TEST_URL).hostname,
-                    port: 80,
-                },
+            const response = await fetch(TEST_URL, {
+                agent,
                 timeout: TIMEOUT,
-            };
+                method: "HEAD",
+            });
 
-            SocksClient.createConnection(options)
-                .then(() => {
-                    resolve(true);
-                })
-                .catch(() => {
-                    resolve(false);
-                });
+            resolve(response.ok);
         } catch (error) {
             resolve(false);
         }
     });
 }
 
-async function checkProxy(proxyUrl) {
+async function checkProxy(proxyStr) {
     try {
-        if (proxyUrl.startsWith("http://") || proxyUrl.startsWith("https://")) {
-            return await checkHttpProxy(proxyUrl);
-        } else if (proxyUrl.startsWith("socks4://") || proxyUrl.startsWith("socks5://")) {
-            return await checkSocksProxy(proxyUrl);
-        } else {
-            return await checkHttpProxy("http://" + proxyUrl);
+        const proxyInfo = parseProxyString(proxyStr);
+
+        switch (proxyInfo.protocol) {
+            case "http":
+            case "https":
+                return await checkHttpProxy(proxyInfo);
+            case "socks4":
+            case "socks5":
+                return await checkSocksProxy(proxyInfo);
+            default:
+
+                proxyInfo.protocol = "http";
+                return await checkHttpProxy(proxyInfo);
         }
-        return false;
     } catch (error) {
         return false;
     }
@@ -147,7 +160,7 @@ async function processProxiesInBatches(proxies) {
     const totalProxies = proxies.length;
     let processedCount = 0;
 
-    console.log(`Starting check of ${totalProxies} proxies...`);
+    console.log(`Starting proxy check of ${totalProxies} proxies...`);
 
     for (let i = 0; i < totalProxies; i += CONCURRENT_CHECKS) {
         const batch = proxies.slice(i, i + CONCURRENT_CHECKS);
@@ -162,10 +175,10 @@ async function processProxiesInBatches(proxies) {
             }
 
             if (isWorking) {
-                console.log(`✅ It works.: ${proxy}`);
+                console.log(`✅ Works: ${proxy}`);
                 workingProxies.push(proxy);
             } else {
-                console.log(`❌ Not working: ${proxy}`);
+                console.log(`❌ Not works: ${proxy}`);
             }
 
             return { proxy, isWorking };
