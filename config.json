@@ -1,0 +1,8 @@
+{
+    "proxy_file": "proxy.txt",
+    "output_file": "working_proxies.txt",
+    "test_url": "http://www.google.com",
+    "timeout": 5,
+    "concurrent_checks": 20,
+    "save_to_input_file": false
+}

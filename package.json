@@ -1,0 +1,21 @@
+{
+    "name": "proxy-checker",
+    "version": "1.0.0",
+    "description": "A tool for checking proxy server performance",
+    "main": "proxy_checker.js",
+    "scripts": {
+        "start": "node proxy_checker.js",
+        "config": "node config_editor.js"
+    },
+    "keywords": [
+        "proxy",
+        "checker",
+        "http",
+        "socks"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "socks": "^2.7.1"
+    }
+}
