@@ -1,7 +1,7 @@
 {
     "name": "proxy-checker",
     "version": "1.0.0",
-    "description": "Інструмент для перевірки працездатності проксі-серверів",
+    "description": "Proxy Checker - checking the proxy",
     "main": "proxy_checker.js",
     "scripts": {
         "start": "node proxy_checker.js",

@@ -24,25 +24,62 @@ Both versions use the same configuration file `config.json`.
 
 Installation of dependencies:
 
-```
+```bash
 pip install aiohttp aiofiles aiohttp_socks
 ```
 
 or
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 ### For the JavaScript version:
 
 -   Node.js 12+
--   Installed packages: socks, https-proxy-agent, socks-proxy-agent, node-fetch
+-   Installed packages: node-fetch, https-proxy-agent, socks-proxy-agent
 
 Installation of dependencies:
 
-```
+```bash
 npm install
+```
+
+## Performance Optimizations
+
+The program includes several optimizations for faster proxy checking:
+
+-   Uses HEAD requests instead of GET
+-   Supports up to 50 concurrent checks
+-   Implements timeout control (3 seconds by default)
+-   Uses lightweight test URL (httpbin.org/status/200)
+-   Includes detailed status logging for each proxy
+
+## Configuration Settings
+
+Default configuration (`config.json`):
+
+```json
+{
+    "proxy_file": "proxy.txt",
+    "output_file": "working_proxies.txt",
+    "test_url": "http://httpbin.org/status/200",
+    "timeout": 3,
+    "concurrent_checks": 50,
+    "save_to_input_file": false
+}
+```
+
+To edit the configuration, run:
+
+```bash
+python config_editor.py
+```
+
+or for the JavaScript version:
+
+```bash
+node config_editor.js
 ```
 
 ## Usage
@@ -53,7 +90,7 @@ For easy startup, you can use the run scripts:
 
 #### Windows
 
-```
+```bash
 run.bat
 ```
 
@@ -61,7 +98,7 @@ or just double-click on `run.bat`
 
 #### Linux/MacOS
 
-```
+```bash
 chmod +x run.sh  # Only needed first time
 ./run.sh
 ```
@@ -120,52 +157,40 @@ or for the JavaScript version:
 node config_editor.js
 ```
 
-You can also specify the path to the configuration file:
-
-```
-python config_editor.py -c my_config.json
-```
-
-or
-
-```
-node config_editor.js -c my_config.json
-```
-
-Configuration parameters:
-
--   `proxy_file` - path to the file with proxies
--   `output_file` - path to the file to save working proxies
--   `test_url` - URL for testing proxies
--   `timeout` - timeout in seconds for checking proxies
--   `concurrent_checks` - number of concurrent checks
--   `save_to_input_file` - save working proxies back to the input file (true/false)
-
-### Running proxy check
+### Manual Start
 
 To run the proxy check manually, execute:
 
-```
+```bash
 python proxy_checker.py
 ```
 
 or for the JavaScript version:
 
-```
+```bash
 node proxy_checker.js
 ```
 
 You can also specify the path to the configuration file:
 
-```
+```bash
 python proxy_checker.py -c my_config.json
 ```
 
 or
 
-```
+```bash
 node proxy_checker.js -c my_config.json
 ```
+
+## Status Indicators
+
+The program uses the following indicators:
+
+-   ✅ Working: Proxy is working
+-   ❌ Failed: Proxy is not working
+-   ❌ Timeout: Proxy did not respond in time
+-   Progress percentage is shown every 10 proxies
 
 ## Project structure
 
