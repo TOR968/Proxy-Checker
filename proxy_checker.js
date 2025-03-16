@@ -27,18 +27,15 @@ function parseProxyString(proxyStr) {
     let host = "";
     let port = "";
 
-    // Перевіряємо, чи є протокол
     if (proxyStr.includes("://")) {
         [protocol, proxyStr] = proxyStr.split("://");
     }
 
-    // Якщо є @ - значить є автентифікація
     if (proxyStr.includes("@")) {
         const [auth, hostPort] = proxyStr.split("@");
         [username, password] = auth.split(":");
         [host, port] = hostPort.split(":");
     } else if (proxyStr.includes(":")) {
-        // Формат без @ але з автентифікацією (ip:port:username:password)
         const parts = proxyStr.split(":");
         if (parts.length === 4) {
             [host, port, username, password] = parts;
@@ -96,19 +93,26 @@ function readProxiesFromFile(filePath) {
     }
 }
 
+function timeout(ms) {
+    return new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms));
+}
+
 async function checkHttpProxy(proxyInfo) {
     return new Promise(async (resolve) => {
         try {
             const proxyUrl = proxyInfo.toString();
             const agent = new HttpsProxyAgent(proxyUrl);
 
-            const response = await fetch(TEST_URL, {
-                agent,
-                timeout: TIMEOUT,
-                method: "HEAD",
-            });
+            const result = await Promise.race([
+                fetch(TEST_URL, {
+                    agent,
+                    timeout: TIMEOUT,
+                    method: "HEAD",
+                }),
+                timeout(TIMEOUT),
+            ]);
 
-            resolve(response.ok);
+            resolve(result.ok);
         } catch (error) {
             resolve(false);
         }
@@ -121,13 +125,16 @@ async function checkSocksProxy(proxyInfo) {
             const proxyUrl = proxyInfo.toString();
             const agent = new SocksProxyAgent(proxyUrl);
 
-            const response = await fetch(TEST_URL, {
-                agent,
-                timeout: TIMEOUT,
-                method: "HEAD",
-            });
+            const result = await Promise.race([
+                fetch(TEST_URL, {
+                    agent,
+                    timeout: TIMEOUT,
+                    method: "HEAD",
+                }),
+                timeout(TIMEOUT),
+            ]);
 
-            resolve(response.ok);
+            resolve(result.ok);
         } catch (error) {
             resolve(false);
         }
@@ -146,7 +153,6 @@ async function checkProxy(proxyStr) {
             case "socks5":
                 return await checkSocksProxy(proxyInfo);
             default:
-
                 proxyInfo.protocol = "http";
                 return await checkHttpProxy(proxyInfo);
         }
@@ -155,36 +161,79 @@ async function checkProxy(proxyStr) {
     }
 }
 
+class Semaphore {
+    constructor(max) {
+        this.max = max;
+        this.count = 0;
+        this.queue = [];
+    }
+
+    async acquire() {
+        if (this.count < this.max) {
+            this.count++;
+            return;
+        }
+        await new Promise((resolve) => this.queue.push(resolve));
+        this.count++;
+    }
+
+    release() {
+        this.count--;
+        if (this.queue.length > 0) {
+            const next = this.queue.shift();
+            next();
+        }
+    }
+}
+
 async function processProxiesInBatches(proxies) {
+    const sem = new Semaphore(CONCURRENT_CHECKS);
     const workingProxies = [];
     const totalProxies = proxies.length;
     let processedCount = 0;
 
     console.log(`Starting proxy check of ${totalProxies} proxies...`);
 
-    for (let i = 0; i < totalProxies; i += CONCURRENT_CHECKS) {
-        const batch = proxies.slice(i, i + CONCURRENT_CHECKS);
-        const promises = batch.map(async (proxy) => {
-            const isWorking = await checkProxy(proxy);
-            processedCount++;
+    const checkWithSem = async (proxy) => {
+        try {
+            await sem.acquire();
+            const isWorking = await Promise.race([checkProxy(proxy), timeout(TIMEOUT * 2)]);
 
+            processedCount++;
             if (processedCount % 10 === 0 || processedCount === totalProxies) {
                 console.log(
-                    `Progress: ${processedCount}/${totalProxies} (${Math.round((processedCount / totalProxies) * 100)}%)`
+                    `Progress: ${processedCount}/${totalProxies} (${Math.round(
+                        (processedCount / totalProxies) * 100
+                    )}%)`
                 );
             }
 
             if (isWorking) {
-                console.log(`✅ Works: ${proxy}`);
+                console.log(`✅ Working: ${proxy}`);
                 workingProxies.push(proxy);
             } else {
-                console.log(`❌ Not works: ${proxy}`);
+                console.log(`❌ Failed: ${proxy}`);
             }
 
-            return { proxy, isWorking };
-        });
+            return isWorking;
+        } catch (error) {
+            processedCount++;
+            console.log(`❌ Timeout: ${proxy}`);
+            return false;
+        } finally {
+            sem.release();
+        }
+    };
 
-        await Promise.all(promises);
+    const batchSize = CONCURRENT_CHECKS;
+    for (let i = 0; i < proxies.length; i += batchSize) {
+        const batch = proxies.slice(i, i + batchSize);
+        try {
+            await Promise.race([Promise.all(batch.map(checkWithSem)), timeout(TIMEOUT * 3)]);
+        } catch (error) {
+            console.log(`Batch timeout, moving to next batch...`);
+            continue;
+        }
     }
 
     return workingProxies;

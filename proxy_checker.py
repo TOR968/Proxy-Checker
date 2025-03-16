@@ -8,6 +8,7 @@ import json
 import argparse
 from urllib.parse import urlparse, unquote
 from aiohttp_socks import ProxyConnector, ProxyType
+from asyncio import Semaphore
 
 DEFAULT_CONFIG_FILE = 'config.json'
 
@@ -26,9 +27,9 @@ def load_config(config_file):
         return {
             "proxy_file": "proxy.txt",
             "output_file": "working_proxies.txt",
-            "test_url": "http://www.google.com",
-            "timeout": 5,
-            "concurrent_checks": 20,
+            "test_url": "http://httpbin.org/status/200",
+            "timeout": 3,
+            "concurrent_checks": 50,
             "save_to_input_file": False
         }
 
@@ -69,17 +70,14 @@ def parse_proxy_string(proxy_str):
     host = None
     port = None
 
-    # First check if protocol is present
     if "://" in proxy_str:
         protocol, proxy_str = proxy_str.split("://", 1)
 
-    # Check format with @
     if "@" in proxy_str:
         auth, hostport = proxy_str.rsplit("@", 1)
         username, password = auth.split(":", 1)
         host, port = hostport.split(":", 1)
     else:
-        # Check format ip:port:username:password
         parts = proxy_str.split(":")
         if len(parts) == 4:
             host, port, username, password = parts
@@ -103,7 +101,6 @@ async def check_proxy(proxy_str):
         username = proxy_info["username"]
         password = proxy_info["password"]
         
-        # Form proxy URL with authentication
         proxy_auth = f"{username}:{password}@" if username and password else ""
         proxy_url = f"{protocol}://{proxy_auth}{host}:{port}"
         
@@ -112,72 +109,65 @@ async def check_proxy(proxy_str):
         elif protocol == "socks4":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS4,
-                host=host,
-                port=port,
-                username=username,
-                password=password
+                host=host, port=port,
+                username=username, password=password
             )
         elif protocol == "socks5":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS5,
-                host=host,
-                port=port,
-                username=username,
-                password=password
+                host=host, port=port,
+                username=username, password=password
             )
         else:
-            print(f"❌ Not working: {proxy_str} (Unsupported protocol: {protocol})")
             return False
         
         timeout = aiohttp.ClientTimeout(total=TIMEOUT)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            async with session.get(TEST_URL) as response:
-                if response.status >= 200 and response.status < 300:
-                    return True
-                else:
-                    print(f"❌ Not working: {proxy_str} (HTTP {response.status})")
-                    return False
-    except aiohttp.ClientError as e:
-        error_msg = str(e)
-        if "Couldn't connect to proxy" in error_msg:
-            print(f"❌ Not working: {proxy_str} (Connection failed)")
-        elif "Invalid proxy response" in error_msg:
-            print(f"❌ Not working: {proxy_str} (Invalid response)")
-        else:
-            print(f"❌ Not working: {proxy_str} (Client error: {error_msg})")
-        return False
-    except asyncio.TimeoutError:
-        print(f"❌ Not working: {proxy_str} (Timeout)")
-        return False
+            async with session.head(TEST_URL) as response:  # Changed to HEAD request
+                return response.status >= 200 and response.status < 300
+                
     except Exception as e:
-        print(f"❌ Not working: {proxy_str} (Error: {str(e)})")
         return False
 
 async def process_proxies(proxies):
+    sem = Semaphore(CONCURRENT_CHECKS)
     working_proxies = []
     total_proxies = len(proxies)
     processed_count = 0
     
+    async def check_with_sem(proxy):
+        async with sem:
+            try:
+                result = await asyncio.wait_for(check_proxy(proxy), timeout=TIMEOUT * 2)
+                return result
+            except asyncio.TimeoutError:
+                return "timeout"
+            except Exception:
+                return False
+    
     print(f"Starting proxy check of {total_proxies} proxies...")
     
-    for i in range(0, total_proxies, CONCURRENT_CHECKS):
-        batch = proxies[i:i + CONCURRENT_CHECKS]
-        tasks = [check_proxy(proxy) for proxy in batch]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    tasks = [check_with_sem(proxy) for proxy in proxies]
+    
+    batch_size = CONCURRENT_CHECKS * 2
+    for i in range(0, len(tasks), batch_size):
+        batch = tasks[i:i + batch_size]
+        results = await asyncio.gather(*batch, return_exceptions=True)
         
         for j, result in enumerate(results):
-            proxy = batch[j]
-            is_working = isinstance(result, bool) and result
-            
+            proxy = proxies[i + j]
             processed_count += 1
             
             if processed_count % 10 == 0 or processed_count == total_proxies:
                 print(f"Progress: {processed_count}/{total_proxies} ({round(processed_count/total_proxies*100)}%)")
             
-            if is_working:
+            if isinstance(result, bool) and result:
                 print(f"✅ Working: {proxy}")
                 working_proxies.append(proxy)
+            elif result == "timeout":
+                print(f"❌ Timeout: {proxy}")
+            else:
+                print(f"❌ Failed: {proxy}")
     
     return working_proxies
 
