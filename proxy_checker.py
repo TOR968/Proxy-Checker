@@ -1,26 +1,29 @@
-import os
 import sys
-import time
 import asyncio
 import aiohttp
 import aiofiles
 import json
 import argparse
-from urllib.parse import urlparse, unquote
 from aiohttp_socks import ProxyConnector, ProxyType
 from asyncio import Semaphore
 
-DEFAULT_CONFIG_FILE = 'config.json'
+DEFAULT_CONFIG_FILE = "config.json"
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Proxy Checker - checking the proxy')
-    parser.add_argument('-c', '--config', default=DEFAULT_CONFIG_FILE, 
-                        help=f'Path to the configuration file (default: {DEFAULT_CONFIG_FILE})')
+    parser = argparse.ArgumentParser(description="Proxy Checker - checking the proxy")
+    parser.add_argument(
+        "-c",
+        "--config",
+        default=DEFAULT_CONFIG_FILE,
+        help=f"Path to the configuration file (default: {DEFAULT_CONFIG_FILE})",
+    )
     return parser.parse_args()
+
 
 def load_config(config_file):
     try:
-        with open(config_file, 'r') as file:
+        with open(config_file, "r") as file:
             return json.load(file)
     except Exception as e:
         print(f"Error loading config file: {e}")
@@ -30,18 +33,20 @@ def load_config(config_file):
             "test_url": "http://httpbin.org/status/200",
             "timeout": 3,
             "concurrent_checks": 50,
-            "save_to_input_file": False
+            "save_to_input_file": False,
         }
+
 
 def save_config(config_data, config_file):
     try:
-        with open(config_file, 'w') as file:
+        with open(config_file, "w") as file:
             json.dump(config_data, file, indent=4)
         print(f"Configuration saved to {config_file}")
         return True
     except Exception as e:
         print(f"Error saving config file: {e}")
         return False
+
 
 args = parse_args()
 CONFIG_FILE = args.config
@@ -54,13 +59,15 @@ TIMEOUT = config["timeout"]
 CONCURRENT_CHECKS = config["concurrent_checks"]
 SAVE_TO_INPUT_FILE = config.get("save_to_input_file", False)
 
+
 def read_proxies_from_file(file_path):
     try:
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             return [line.strip() for line in file if line.strip()]
     except Exception as e:
         print(f"Error reading file: {e}")
         return []
+
 
 def parse_proxy_string(proxy_str):
     """Parse proxy string in different formats"""
@@ -89,8 +96,9 @@ def parse_proxy_string(proxy_str):
         "host": host,
         "port": int(port),
         "username": username,
-        "password": password
+        "password": password,
     }
+
 
 async def check_proxy(proxy_str):
     try:
@@ -100,41 +108,48 @@ async def check_proxy(proxy_str):
         port = proxy_info["port"]
         username = proxy_info["username"]
         password = proxy_info["password"]
-        
+
         proxy_auth = f"{username}:{password}@" if username and password else ""
         proxy_url = f"{protocol}://{proxy_auth}{host}:{port}"
-        
+
         if protocol in ["http", "https"]:
             connector = ProxyConnector.from_url(proxy_url)
         elif protocol == "socks4":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS4,
-                host=host, port=port,
-                username=username, password=password
+                host=host,
+                port=port,
+                username=username,
+                password=password,
             )
         elif protocol == "socks5":
             connector = ProxyConnector(
                 proxy_type=ProxyType.SOCKS5,
-                host=host, port=port,
-                username=username, password=password
+                host=host,
+                port=port,
+                username=username,
+                password=password,
             )
         else:
             return False
-        
+
         timeout = aiohttp.ClientTimeout(total=TIMEOUT)
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        async with aiohttp.ClientSession(
+            connector=connector, timeout=timeout
+        ) as session:
             async with session.head(TEST_URL) as response:  # Changed to HEAD request
                 return response.status >= 200 and response.status < 300
-                
+
     except Exception as e:
         return False
+
 
 async def process_proxies(proxies):
     sem = Semaphore(CONCURRENT_CHECKS)
     working_proxies = []
     total_proxies = len(proxies)
     processed_count = 0
-    
+
     async def check_with_sem(proxy):
         async with sem:
             try:
@@ -144,23 +159,25 @@ async def process_proxies(proxies):
                 return "timeout"
             except Exception:
                 return False
-    
+
     print(f"Starting proxy check of {total_proxies} proxies...")
-    
+
     tasks = [check_with_sem(proxy) for proxy in proxies]
-    
+
     batch_size = CONCURRENT_CHECKS * 2
     for i in range(0, len(tasks), batch_size):
-        batch = tasks[i:i + batch_size]
+        batch = tasks[i : i + batch_size]
         results = await asyncio.gather(*batch, return_exceptions=True)
-        
+
         for j, result in enumerate(results):
             proxy = proxies[i + j]
             processed_count += 1
-            
+
             if processed_count % 10 == 0 or processed_count == total_proxies:
-                print(f"Progress: {processed_count}/{total_proxies} ({round(processed_count/total_proxies*100)}%)")
-            
+                print(
+                    f"Progress: {processed_count}/{total_proxies} ({round(processed_count / total_proxies * 100)}%)"
+                )
+
             if isinstance(result, bool) and result:
                 print(f"✅ Working: {proxy}")
                 working_proxies.append(proxy)
@@ -168,50 +185,52 @@ async def process_proxies(proxies):
                 print(f"❌ Timeout: {proxy}")
             else:
                 print(f"❌ Failed: {proxy}")
-    
+
     return working_proxies
+
 
 async def save_working_proxies(proxies, file_path):
     try:
-        async with aiofiles.open(file_path, 'w') as file:
-            await file.write('\n'.join(proxies))
+        async with aiofiles.open(file_path, "w") as file:
+            await file.write("\n".join(proxies))
         print(f"Saved {len(proxies)} working proxies to file {file_path}")
     except Exception as e:
         print(f"Error saving file: {e}")
 
+
 async def main():
-    print('Starting proxy check...')
-    print(f'Using configuration from {CONFIG_FILE}')
-    print(f'Proxy file: {PROXY_FILE}')
-    print(f'Output file: {OUTPUT_FILE}')
-    print(f'Test URL: {TEST_URL}')
-    print(f'Timeout: {TIMEOUT} seconds')
-    print(f'Concurrent checks: {CONCURRENT_CHECKS}')
-    print(f'Save to input file: {SAVE_TO_INPUT_FILE}')
-    
+    print("Starting proxy check...")
+    print(f"Using configuration from {CONFIG_FILE}")
+    print(f"Proxy file: {PROXY_FILE}")
+    print(f"Output file: {OUTPUT_FILE}")
+    print(f"Test URL: {TEST_URL}")
+    print(f"Timeout: {TIMEOUT} seconds")
+    print(f"Concurrent checks: {CONCURRENT_CHECKS}")
+    print(f"Save to input file: {SAVE_TO_INPUT_FILE}")
+
     proxies = read_proxies_from_file(PROXY_FILE)
     print(f"Loaded {len(proxies)} proxies from file {PROXY_FILE}")
-    
+
     if not proxies:
-        print('No proxies found for checking.')
+        print("No proxies found for checking.")
         return
-    
+
     working_proxies = await process_proxies(proxies)
-    
-    print(f"\nResults of the check:")
+
+    print("\nResults of the check:")
     print(f"Total proxies: {len(proxies)}")
     print(f"Working proxies: {len(working_proxies)}")
     print(f"Not working proxies: {len(proxies) - len(working_proxies)}")
-    
-    await save_working_proxies(working_proxies, OUTPUT_FILE)
-    
+
     if SAVE_TO_INPUT_FILE:
         print(f"Saving working proxies back to input file {PROXY_FILE}")
         await save_working_proxies(working_proxies, PROXY_FILE)
     else:
-        print(f"Not saving to input file (disabled in config)")
+        print("Not saving to input file (disabled in config)")
+        await save_working_proxies(working_proxies, OUTPUT_FILE)
+
 
 if __name__ == "__main__":
-    if sys.platform.startswith('win'):
+    if sys.platform.startswith("win"):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main()) 
+    asyncio.run(main())
