@@ -273,13 +273,12 @@ async function main() {
     console.log(`Working proxies: ${workingProxies.length}`);
     console.log(`Not working proxies: ${proxies.length - workingProxies.length}`);
 
-    saveWorkingProxies(workingProxies, OUTPUT_FILE);
-
     if (SAVE_TO_INPUT_FILE) {
         console.log(`Saving working proxies to input file: ${PROXY_FILE}`);
         saveWorkingProxies(workingProxies, PROXY_FILE);
     } else {
         console.log(`Not saving to input file (disabled in configuration)`);
+        saveWorkingProxies(workingProxies, OUTPUT_FILE);
     }
 }
 

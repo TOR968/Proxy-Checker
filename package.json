@@ -6,7 +6,8 @@
     "scripts": {
         "start": "node proxy_checker.js",
         "config": "node config_editor.js",
-        "download": "node download_proxies.js"
+        "download": "node download_proxies.js",
+        "copy": "node copy_proxies.js"
     },
     "keywords": [
         "proxy",
