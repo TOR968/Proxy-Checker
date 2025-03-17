@@ -25,7 +25,7 @@ Both versions use the same configuration file `config.json`.
 Installation of dependencies:
 
 ```bash
-pip install aiohttp aiofiles aiohttp_socks
+pip install aiohttp aiofiles aiohttp_socks requests
 ```
 
 or

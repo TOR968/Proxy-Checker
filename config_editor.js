@@ -25,6 +25,7 @@ function loadConfig(configPath) {
     } catch (error) {
         console.error(`Error loading configuration: ${error.message}`);
         return {
+            proxy_url: "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
             proxy_file: "proxy.txt",
             output_file: "working_proxies.txt",
             test_url: "http://www.google.com",
@@ -79,6 +80,9 @@ async function editConfig(configPath) {
     console.log("\nEditing configuration:");
     console.log("Leave the field empty to keep the current value");
 
+    const proxyUrl = await question(rl, `Proxy URL [${config.proxy_url || ""}]: `);
+    if (proxyUrl) config.proxy_url = proxyUrl;
+
     const proxyFile = await question(rl, `Proxy file [${config.proxy_file}]: `);
     if (proxyFile) config.proxy_file = proxyFile;
 
@@ -112,15 +116,9 @@ async function editConfig(configPath) {
         rl,
         `Save working proxies to input file (y/n) [${config.save_to_input_file ? "y" : "n"}]: `
     );
-    if (
-        saveToInputFile.toLowerCase() === "y" ||
-        saveToInputFile.toLowerCase() === "yes"
-    ) {
+    if (saveToInputFile.toLowerCase() === "y" || saveToInputFile.toLowerCase() === "yes") {
         config.save_to_input_file = true;
-    } else if (
-        saveToInputFile.toLowerCase() === "n" ||
-        saveToInputFile.toLowerCase() === "no"
-    ) {
+    } else if (saveToInputFile.toLowerCase() === "n" || saveToInputFile.toLowerCase() === "no") {
         config.save_to_input_file = false;
     }
 
