@@ -135,3 +135,7 @@ __pycache__/
 *.pyo
 *.pyd
 .venv
+
+# Project specific
+data/proxy.txt
+data/working_proxies.txt

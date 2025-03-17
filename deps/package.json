@@ -2,12 +2,12 @@
     "name": "proxy-checker",
     "version": "1.0.0",
     "description": "Proxy Checker - checking the proxy",
-    "main": "proxy_checker.js",
+    "main": "../src/javascript/proxy_checker.js",
     "scripts": {
-        "start": "node proxy_checker.js",
-        "config": "node config_editor.js",
-        "download": "node download_proxies.js",
-        "copy": "node copy_proxies.js"
+        "start": "node ../src/javascript/proxy_checker.js",
+        "config": "node ../src/javascript/config_editor.js",
+        "download": "node ../src/javascript/download_proxies.js",
+        "copy": "node ../src/javascript/copy_proxies.js"
     },
     "keywords": [
         "proxy",

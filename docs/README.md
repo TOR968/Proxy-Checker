@@ -6,14 +6,47 @@ A tool for checking proxy server performance and managing proxy files across mul
 
 This program checks the list of proxy servers for functionality and saves working proxies to a separate file. It supports HTTP, HTTPS, SOCKS4 and SOCKS5 proxies with and without authentication. Additionally, it includes functionality to copy working proxies between different projects.
 
+## Project Structure
+
+```
+.
+├── src/
+│   ├── python/
+│   │   ├── proxy_checker.py
+│   │   ├── copy_proxies.py
+│   │   ├── download_proxies.py
+│   │   └── config_editor.py
+│   └── javascript/
+│       ├── proxy_checker.js
+│       ├── copy_proxies.js
+│       ├── download_proxies.js
+│       └── config_editor.js
+├── config/
+│   ├── proxy_config.json
+│   └── config.json
+├── data/
+│   ├── proxy.txt
+│   └── working_proxies.txt
+├── deps/
+│   ├── package.json
+│   ├── package-lock.json
+│   └── requirements.txt
+├── scripts/
+│   ├── run.sh
+│   └── run.bat
+└── docs/
+    ├── README.md
+    └── LICENSE
+```
+
 ## Versions
 
 The program is available in two versions:
 
--   Python (proxy_checker.py, copy_proxies.py)
--   JavaScript (proxy_checker.js, copy_proxies.js)
+-   Python (`src/python/proxy_checker.py`, `src/python/copy_proxies.py`)
+-   JavaScript (`src/javascript/proxy_checker.js`, `src/javascript/copy_proxies.js`)
 
-Both versions use the same configuration files: `config.json` for proxy checking and `proxy_config.json` for proxy copying.
+Both versions use the same configuration files: `config/config.json` for proxy checking and `config/proxy_config.json` for proxy copying.
 
 ## Requirements
 
@@ -57,7 +90,7 @@ The program includes several optimizations for faster proxy checking:
 
 ## Configuration Settings
 
-Default configuration (`config.json`):
+Default configuration (`config/config.json`):
 
 ```json
 {
@@ -73,13 +106,13 @@ Default configuration (`config.json`):
 To edit the configuration, run:
 
 ```bash
-python config_editor.py
+python src/python/config_editor.py
 ```
 
 or for the JavaScript version:
 
 ```bash
-node config_editor.js
+node src/javascript/config_editor.js
 ```
 
 ## Usage
@@ -101,6 +134,19 @@ or just double-click on `run.bat`
 ```bash
 chmod +x run.sh  # Only needed first time
 ./run.sh
+```
+
+#### Using npm scripts (JavaScript version only)
+
+If you prefer using npm scripts, you can use the following commands:
+
+```bash
+cd deps
+npm install
+npm run start    # Run proxy checker
+npm run config   # Edit configuration
+npm run download # Download proxies
+npm run copy     # Copy proxies between projects
 ```
 
 These scripts will:
@@ -147,14 +193,14 @@ socks5://ip:port
 
 To edit the configuration, run:
 
-```
-python config_editor.py
+```bash
+python src/python/config_editor.py
 ```
 
 or for the JavaScript version:
 
-```
-node config_editor.js
+```bash
+node src/javascript/config_editor.js
 ```
 
 ### Manual Start
@@ -162,25 +208,25 @@ node config_editor.js
 To run the proxy check manually, execute:
 
 ```bash
-python proxy_checker.py
+python src/python/proxy_checker.py
 ```
 
 or for the JavaScript version:
 
 ```bash
-node proxy_checker.js
+node src/javascript/proxy_checker.js
 ```
 
 You can also specify the path to the configuration file:
 
 ```bash
-python proxy_checker.py -c my_config.json
+python src/python/proxy_checker.py -c config/my_config.json
 ```
 
 or
 
 ```bash
-node proxy_checker.js -c my_config.json
+node src/javascript/proxy_checker.js -c config/my_config.json
 ```
 
 ## Status Indicators
@@ -229,13 +275,13 @@ Create a `proxy_config.json` file with the following structure:
 To copy proxies between projects, run:
 
 ```bash
-python copy_proxies.py
+python src/python/copy_proxies.py
 ```
 
 or for the JavaScript version:
 
 ```bash
-node copy_proxies.js
+node src/javascript/copy_proxies.js
 ```
 
 The script will:

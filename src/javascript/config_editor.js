@@ -2,7 +2,16 @@ const fs = require("fs");
 const readline = require("readline");
 const path = require("path");
 
-const DEFAULT_CONFIG_FILE = "config.json";
+const DEFAULT_CONFIG_FILE = path.join("config", "config.json");
+
+function getProjectRoot() {
+    const scriptDir = path.dirname(__filename);
+    return path.dirname(path.dirname(scriptDir));
+}
+
+function getFilePath(relativePath) {
+    return path.join(getProjectRoot(), relativePath);
+}
 
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -20,14 +29,15 @@ function parseArgs() {
 
 function loadConfig(configPath) {
     try {
-        const configData = fs.readFileSync(configPath, "utf8");
+        const fullPath = getFilePath(configPath);
+        const configData = fs.readFileSync(fullPath, "utf8");
         return JSON.parse(configData);
     } catch (error) {
         console.error(`Error loading configuration: ${error.message}`);
         return {
             proxy_url: "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
-            proxy_file: "proxy.txt",
-            output_file: "working_proxies.txt",
+            proxy_file: path.join("data", "proxy.txt"),
+            output_file: path.join("data", "working_proxies.txt"),
             test_url: "http://www.google.com",
             timeout: 5,
             concurrent_checks: 20,
@@ -38,7 +48,8 @@ function loadConfig(configPath) {
 
 function saveConfig(config, configPath) {
     try {
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+        const fullPath = getFilePath(configPath);
+        fs.writeFileSync(fullPath, JSON.stringify(config, null, 4));
         console.log(`Configuration saved to file: ${configPath}`);
         return true;
     } catch (error) {

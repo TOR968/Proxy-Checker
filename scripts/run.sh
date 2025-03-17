@@ -13,14 +13,18 @@ if [ "$choice" = "1" ]; then
     echo ""
     echo "Running the JavaScript version..."
     echo ""
+    cd deps
     npm install
-    node proxy_checker.js
+    cd ..
+    node src/javascript/proxy_checker.js
 elif [ "$choice" = "2" ]; then
     echo ""
     echo "Starting the Python version..."
     echo ""
+    cd deps
     pip install -r requirements.txt
-    python3 proxy_checker.py
+    cd ..
+    python3 src/python/proxy_checker.py
 else
     echo ""
     echo "Wrong choice. Please select 1 or 2."

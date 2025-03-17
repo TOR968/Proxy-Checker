@@ -12,14 +12,18 @@ if "%choice%"=="1" (
     echo.
     echo Starting the JavaScript version...
     echo.
+    cd deps
     npm install
-    node proxy_checker.js
+    cd ..
+    node src\javascript\proxy_checker.js
 ) else if "%choice%"=="2" (
     echo.
     echo Starting the Python version...
     echo.
+    cd deps
     pip install -r requirements.txt
-    python proxy_checker.py
+    cd ..
+    python src\python\proxy_checker.py
 ) else (
     echo.
     echo Incorrect choice. Please select 1 or 2.

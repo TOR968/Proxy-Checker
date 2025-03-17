@@ -4,10 +4,11 @@ import aiohttp
 import aiofiles
 import json
 import argparse
+import os
 from aiohttp_socks import ProxyConnector, ProxyType
 from asyncio import Semaphore
 
-DEFAULT_CONFIG_FILE = "config.json"
+DEFAULT_CONFIG_FILE = os.path.join("config", "config.json")
 
 
 def parse_args():
@@ -21,15 +22,24 @@ def parse_args():
     return parser.parse_args()
 
 
+def get_project_root():
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def get_file_path(relative_path):
+    return os.path.join(get_project_root(), relative_path)
+
+
 def load_config(config_file):
     try:
-        with open(config_file, "r") as file:
+        config_path = get_file_path(config_file)
+        with open(config_path, "r") as file:
             return json.load(file)
     except Exception as e:
         print(f"Error loading config file: {e}")
         return {
-            "proxy_file": "proxy.txt",
-            "output_file": "working_proxies.txt",
+            "proxy_file": os.path.join("data", "proxy.txt"),
+            "output_file": os.path.join("data", "working_proxies.txt"),
             "test_url": "http://httpbin.org/status/200",
             "timeout": 3,
             "concurrent_checks": 50,
@@ -39,7 +49,8 @@ def load_config(config_file):
 
 def save_config(config_data, config_file):
     try:
-        with open(config_file, "w") as file:
+        config_path = get_file_path(config_file)
+        with open(config_path, "w") as file:
             json.dump(config_data, file, indent=4)
         print(f"Configuration saved to {config_file}")
         return True
@@ -52,17 +63,24 @@ args = parse_args()
 CONFIG_FILE = args.config
 
 config = load_config(CONFIG_FILE)
-PROXY_FILE = config["proxy_file"]
-OUTPUT_FILE = config["output_file"]
+# Ensure files are stored in the data directory
+PROXY_FILE = os.path.join("data", os.path.basename(config["proxy_file"]))
+OUTPUT_FILE = os.path.join("data", os.path.basename(config["output_file"]))
 TEST_URL = config["test_url"]
 TIMEOUT = config["timeout"]
 CONCURRENT_CHECKS = config["concurrent_checks"]
 SAVE_TO_INPUT_FILE = config.get("save_to_input_file", False)
 
+# Ensure data directory exists
+data_dir = os.path.join(get_project_root(), "data")
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
+
 
 def read_proxies_from_file(file_path):
     try:
-        with open(file_path, "r") as file:
+        full_path = get_file_path(file_path)
+        with open(full_path, "r") as file:
             return [line.strip() for line in file if line.strip()]
     except Exception as e:
         print(f"Error reading file: {e}")
@@ -191,7 +209,8 @@ async def process_proxies(proxies):
 
 async def save_working_proxies(proxies, file_path):
     try:
-        async with aiofiles.open(file_path, "w") as file:
+        full_path = get_file_path(file_path)
+        async with aiofiles.open(full_path, "w") as file:
             await file.write("\n".join(proxies))
         print(f"Saved {len(proxies)} working proxies to file {file_path}")
     except Exception as e:

@@ -2,7 +2,15 @@ import json
 import os
 import argparse
 
-DEFAULT_CONFIG_FILE = "config.json"
+DEFAULT_CONFIG_FILE = os.path.join("config", "config.json")
+
+
+def get_project_root():
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def get_file_path(relative_path):
+    return os.path.join(get_project_root(), relative_path)
 
 
 def parse_args():
@@ -20,14 +28,15 @@ def parse_args():
 
 def load_config(config_file):
     try:
-        with open(config_file, "r") as file:
+        config_path = get_file_path(config_file)
+        with open(config_path, "r") as file:
             return json.load(file)
     except Exception as e:
         print(f"Error loading config file: {e}")
         return {
             "proxy_url": "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
-            "proxy_file": "proxy.txt",
-            "output_file": "working_proxies.txt",
+            "proxy_file": os.path.join("data", "proxy.txt"),
+            "output_file": os.path.join("data", "working_proxies.txt"),
             "test_url": "http://www.google.com",
             "timeout": 5,
             "concurrent_checks": 20,
@@ -37,7 +46,8 @@ def load_config(config_file):
 
 def save_config(config_data, config_file):
     try:
-        with open(config_file, "w") as file:
+        config_path = get_file_path(config_file)
+        with open(config_path, "w") as file:
             json.dump(config_data, file, indent=4)
         print(f"Configuration saved to {config_file}")
         return True

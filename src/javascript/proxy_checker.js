@@ -1,17 +1,31 @@
 const fs = require("fs");
+const path = require("path");
 const fetch = require("node-fetch");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 
-function loadConfig(configPath = "config.json") {
+function getProjectRoot() {
+    const scriptDir = path.dirname(__filename);
+    return path.dirname(path.dirname(scriptDir));
+}
+
+function getFilePath(relativePath) {
+    const fullPath = path.join(getProjectRoot(), relativePath);
+    console.log(`Resolved path: ${fullPath}`);
+    return fullPath;
+}
+
+function loadConfig(configPath = path.join("config", "config.json")) {
     try {
-        const configData = fs.readFileSync(configPath, "utf8");
+        const fullPath = getFilePath(configPath);
+        console.log(`Loading config from: ${fullPath}`);
+        const configData = fs.readFileSync(fullPath, "utf8");
         return JSON.parse(configData);
     } catch (error) {
         console.error(`Error loading configuration: ${error.message}`);
         return {
-            proxy_file: "proxy.txt",
-            output_file: "working_proxies.txt",
+            proxy_file: "data/proxy.txt",
+            output_file: "data/working_proxies.txt",
             test_url: "http://www.google.com",
             timeout: 5,
             concurrent_checks: 20,
@@ -59,7 +73,7 @@ function parseProxyString(proxyStr) {
 
 function parseArgs() {
     const args = process.argv.slice(2);
-    let configPath = "config.json";
+    let configPath = path.join("config", "config.json");
 
     for (let i = 0; i < args.length; i++) {
         if ((args[i] === "-c" || args[i] === "--config") && i + 1 < args.length) {
@@ -85,7 +99,8 @@ const SAVE_TO_INPUT_FILE = config.save_to_input_file;
 
 function readProxiesFromFile(filePath) {
     try {
-        const data = fs.readFileSync(filePath, "utf8");
+        const fullPath = getFilePath(filePath);
+        const data = fs.readFileSync(fullPath, "utf8");
         return data.split("\n").filter((line) => line.trim() !== "");
     } catch (error) {
         console.error(`Error reading a file:${error.message}`);
@@ -241,10 +256,12 @@ async function processProxiesInBatches(proxies) {
 
 function saveWorkingProxies(proxies, filePath) {
     try {
-        fs.writeFileSync(filePath, proxies.join("\n"));
-        console.log(`Saved ${proxies.length} working proxies to file ${filePath}`);
+        const fullPath = getFilePath(filePath);
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        fs.writeFileSync(fullPath, proxies.join("\n"));
+        console.log(`✅ Saved ${proxies.length} working proxies to ${filePath}`);
     } catch (error) {
-        console.error(`Error saving file: ${error.message}`);
+        console.error(`Error saving working proxies: ${error.message}`);
     }
 }
 

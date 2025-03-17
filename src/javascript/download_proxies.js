@@ -1,7 +1,19 @@
 const fs = require("fs");
+const path = require("path");
 const fetch = require("node-fetch");
 
-const DEFAULT_CONFIG_FILE = "config.json";
+const DEFAULT_CONFIG_FILE = path.join("config", "config.json");
+
+function getProjectRoot() {
+    const scriptDir = path.dirname(__filename);
+    return path.dirname(path.dirname(scriptDir));
+}
+
+function getFilePath(relativePath) {
+    const fullPath = path.join(getProjectRoot(), relativePath);
+    console.log(`Resolved path: ${fullPath}`);
+    return fullPath;
+}
 
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -19,14 +31,16 @@ function parseArgs() {
 
 function loadConfig(configFile) {
     try {
-        const configData = fs.readFileSync(configFile, "utf8");
+        const fullPath = getFilePath(configFile);
+        console.log(`Loading config from: ${fullPath}`);
+        const configData = fs.readFileSync(fullPath, "utf8");
         return JSON.parse(configData);
     } catch (error) {
         console.error(`Error loading config file: ${error}`);
         return {
             proxy_url: "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
-            proxy_file: "proxy.txt",
-            output_file: "working_proxies.txt",
+            proxy_file: "data/proxy.txt",
+            output_file: "data/working_proxies.txt",
             test_url: "http://httpbin.org/status/200",
             timeout: 3,
             concurrent_checks: 50,
@@ -44,7 +58,9 @@ async function downloadAndSaveProxies(config) {
         const text = await response.text();
         const proxies = text.trim().split("\n");
 
-        fs.writeFileSync(config.proxy_file, proxies.join("\n"));
+        const proxyFilePath = getFilePath(config.proxy_file);
+        fs.mkdirSync(path.dirname(proxyFilePath), { recursive: true });
+        fs.writeFileSync(proxyFilePath, proxies.join("\n"));
 
         console.log(`✅ Successfully downloaded ${proxies.length} proxies to ${config.proxy_file}`);
         return true;
