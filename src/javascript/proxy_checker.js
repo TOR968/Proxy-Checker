@@ -90,12 +90,17 @@ console.log(`Using configuration file: ${configPath}`);
 
 const config = loadConfig(configPath);
 
-const PROXY_FILE = config.proxy_file;
-const OUTPUT_FILE = config.output_file;
+const PROXY_FILE = path.join("data", path.basename(config.proxy_file));
+const OUTPUT_FILE = path.join("data", path.basename(config.output_file));
 const TEST_URL = config.test_url;
 const TIMEOUT = config.timeout * 1000;
 const CONCURRENT_CHECKS = config.concurrent_checks;
 const SAVE_TO_INPUT_FILE = config.save_to_input_file;
+
+const dataDir = path.join(getProjectRoot(), "data");
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+}
 
 function readProxiesFromFile(filePath) {
     try {

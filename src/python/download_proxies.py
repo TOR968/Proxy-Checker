@@ -52,11 +52,9 @@ def download_and_save_proxies(config):
         response.raise_for_status()
         proxies = response.text.strip().split("\n")
 
-        # Ensure files are stored in the data directory
         proxy_file = os.path.join("data", os.path.basename(config["proxy_file"]))
         proxy_file_path = get_file_path(proxy_file)
 
-        # Ensure data directory exists
         data_dir = os.path.dirname(proxy_file_path)
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)

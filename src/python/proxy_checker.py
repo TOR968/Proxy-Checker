@@ -63,7 +63,6 @@ args = parse_args()
 CONFIG_FILE = args.config
 
 config = load_config(CONFIG_FILE)
-# Ensure files are stored in the data directory
 PROXY_FILE = os.path.join("data", os.path.basename(config["proxy_file"]))
 OUTPUT_FILE = os.path.join("data", os.path.basename(config["output_file"]))
 TEST_URL = config["test_url"]
@@ -71,7 +70,6 @@ TIMEOUT = config["timeout"]
 CONCURRENT_CHECKS = config["concurrent_checks"]
 SAVE_TO_INPUT_FILE = config.get("save_to_input_file", False)
 
-# Ensure data directory exists
 data_dir = os.path.join(get_project_root(), "data")
 if not os.path.exists(data_dir):
     os.makedirs(data_dir)
@@ -155,7 +153,7 @@ async def check_proxy(proxy_str):
         async with aiohttp.ClientSession(
             connector=connector, timeout=timeout
         ) as session:
-            async with session.head(TEST_URL) as response:  # Changed to HEAD request
+            async with session.head(TEST_URL) as response:
                 return response.status >= 200 and response.status < 300
 
     except Exception as e:

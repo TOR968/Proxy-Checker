@@ -58,11 +58,13 @@ async function downloadAndSaveProxies(config) {
         const text = await response.text();
         const proxies = text.trim().split("\n");
 
-        const proxyFilePath = getFilePath(config.proxy_file);
+        const proxyFile = path.join("data", path.basename(config.proxy_file));
+        const proxyFilePath = getFilePath(proxyFile);
+
         fs.mkdirSync(path.dirname(proxyFilePath), { recursive: true });
         fs.writeFileSync(proxyFilePath, proxies.join("\n"));
 
-        console.log(`✅ Successfully downloaded ${proxies.length} proxies to ${config.proxy_file}`);
+        console.log(`✅ Successfully downloaded ${proxies.length} proxies to ${proxyFile}`);
         return true;
     } catch (error) {
         console.log(`❌ Error downloading proxies: ${error}`);
