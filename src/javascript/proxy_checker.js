@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const fetch = require("node-fetch");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 

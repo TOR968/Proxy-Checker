@@ -69,7 +69,7 @@ pip install -r requirements.txt
 
 ### For the JavaScript version:
 
--   Node.js 12+
+-   Node.js 18+
 -   Installed packages: node-fetch, https-proxy-agent, socks-proxy-agent
 
 Installation of dependencies:

@@ -1,7 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const fetch = require("node-fetch");
-
 const DEFAULT_CONFIG_FILE = path.join("config", "config.json");
 
 function getProjectRoot() {

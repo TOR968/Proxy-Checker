@@ -18,9 +18,7 @@
     "author": "",
     "license": "MIT",
     "dependencies": {
-        "socks": "^2.7.1",
         "https-proxy-agent": "^7.0.2",
-        "socks-proxy-agent": "^8.0.2",
-        "node-fetch": "^2.7.0"
+        "socks-proxy-agent": "^8.0.2"
     }
 }
