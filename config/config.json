@@ -2,8 +2,20 @@
     "proxy_url": "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
     "proxy_file": "proxy.txt",
     "output_file": "working_proxies.txt",
-    "test_url": "http://httpbin.org/status/200",
-    "timeout": 3,
-    "concurrent_checks": 50,
-    "save_to_input_file": true
+    "test_urls": [
+        "https://www.google.com",
+        "https://www.cloudflare.com",
+        "https://www.microsoft.com",
+        "https://www.amazon.com",
+        "https://www.github.com"
+    ],
+    "timeout": 5,
+    "concurrent_checks": 10,
+    "save_to_input_file": true,
+    "retry_count": 1,
+    "speed_filter": {
+        "enabled": false,
+        "max_speed": 1000,
+        "min_speed": 0
+    }
 }

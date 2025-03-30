@@ -38,10 +38,22 @@ function loadConfig(configPath) {
             proxy_url: "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
             proxy_file: path.join("data", "proxy.txt"),
             output_file: path.join("data", "working_proxies.txt"),
-            test_url: "http://www.google.com",
+            test_urls: [
+                "https://www.google.com",
+                "https://www.cloudflare.com",
+                "https://www.microsoft.com",
+                "https://www.amazon.com",
+                "https://www.github.com",
+            ],
             timeout: 5,
             concurrent_checks: 20,
             save_to_input_file: false,
+            retry_count: 1,
+            speed_filter: {
+                enabled: false,
+                max_speed: 1000,
+                min_speed: 0,
+            },
         };
     }
 }
@@ -100,8 +112,13 @@ async function editConfig(configPath) {
     const outputFile = await question(rl, `Output file [${config.output_file}]: `);
     if (outputFile) config.output_file = outputFile;
 
-    const testUrl = await question(rl, `Test URL [${config.test_url}]: `);
-    if (testUrl) config.test_url = testUrl;
+    const testUrlsInput = await question(
+        rl,
+        `Test URLs (comma-separated) [${config.test_urls ? config.test_urls.join(", ") : ""}]: `
+    );
+    if (testUrlsInput) {
+        config.test_urls = testUrlsInput.split(",").map((url) => url.trim());
+    }
 
     const timeout = await question(rl, `Timeout in seconds [${config.timeout}]: `);
     if (timeout) {
@@ -123,6 +140,16 @@ async function editConfig(configPath) {
         }
     }
 
+    const retryCount = await question(rl, `Number of retries for failed proxies [${config.retry_count || 1}]: `);
+    if (retryCount) {
+        const retryCountNum = parseInt(retryCount);
+        if (!isNaN(retryCountNum)) {
+            config.retry_count = retryCountNum;
+        } else {
+            console.log("Invalid number format. Using the previous value.");
+        }
+    }
+
     const saveToInputFile = await question(
         rl,
         `Save working proxies to input file (y/n) [${config.save_to_input_file ? "y" : "n"}]: `
@@ -131,6 +158,40 @@ async function editConfig(configPath) {
         config.save_to_input_file = true;
     } else if (saveToInputFile.toLowerCase() === "n" || saveToInputFile.toLowerCase() === "no") {
         config.save_to_input_file = false;
+    }
+
+    if (!config.speed_filter) {
+        config.speed_filter = { enabled: false, max_speed: 1000, min_speed: 0 };
+    }
+
+    console.log("\nSpeed Filter Configuration:");
+
+    const enableFilter = await question(rl, `Enable speed filter (y/n) [${config.speed_filter.enabled ? "y" : "n"}]: `);
+
+    if (enableFilter.toLowerCase() === "y" || enableFilter.toLowerCase() === "yes") {
+        config.speed_filter.enabled = true;
+
+        const minSpeed = await question(rl, `Minimum acceptable speed in ms [${config.speed_filter.min_speed}]: `);
+        if (minSpeed) {
+            const minSpeedNum = parseInt(minSpeed);
+            if (!isNaN(minSpeedNum)) {
+                config.speed_filter.min_speed = minSpeedNum;
+            } else {
+                console.log("Invalid speed format. Using the previous value.");
+            }
+        }
+
+        const maxSpeed = await question(rl, `Maximum acceptable speed in ms [${config.speed_filter.max_speed}]: `);
+        if (maxSpeed) {
+            const maxSpeedNum = parseInt(maxSpeed);
+            if (!isNaN(maxSpeedNum)) {
+                config.speed_filter.max_speed = maxSpeedNum;
+            } else {
+                console.log("Invalid speed format. Using the previous value.");
+            }
+        }
+    } else if (enableFilter.toLowerCase() === "n" || enableFilter.toLowerCase() === "no") {
+        config.speed_filter.enabled = false;
     }
 
     rl.close();

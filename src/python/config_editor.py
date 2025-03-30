@@ -37,10 +37,18 @@ def load_config(config_file):
             "proxy_url": "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
             "proxy_file": os.path.join("data", "proxy.txt"),
             "output_file": os.path.join("data", "working_proxies.txt"),
-            "test_url": "http://www.google.com",
+            "test_urls": [
+                "https://www.google.com",
+                "https://www.cloudflare.com",
+                "https://www.microsoft.com",
+                "https://www.amazon.com",
+                "https://www.github.com",
+            ],
             "timeout": 5,
             "concurrent_checks": 20,
             "save_to_input_file": False,
+            "retry_count": 1,
+            "speed_filter": {"enabled": False, "max_speed": 1000, "min_speed": 0},
         }
 
 
@@ -80,9 +88,12 @@ def edit_config(config_file):
     config["output_file"] = (
         input(f"Output file [{config['output_file']}]: ") or config["output_file"]
     )
-    config["test_url"] = (
-        input(f"Test URL [{config['test_url']}]: ") or config["test_url"]
+
+    test_urls_input = input(
+        f"Test URLs (comma-separated) [{', '.join(config.get('test_urls', []))}]: "
     )
+    if test_urls_input:
+        config["test_urls"] = [url.strip() for url in test_urls_input.split(",")]
 
     try:
         timeout_input = input(f"Timeout in seconds [{config['timeout']}]: ")
@@ -100,6 +111,15 @@ def edit_config(config_file):
     except ValueError:
         print("Invalid number format. Using the previous value.")
 
+    try:
+        retry_input = input(
+            f"Number of retries for failed proxies [{config.get('retry_count', 1)}]: "
+        )
+        if retry_input:
+            config["retry_count"] = int(retry_input)
+    except ValueError:
+        print("Invalid number format. Using the previous value.")
+
     save_to_input_file = config.get("save_to_input_file", False)
     save_input = input(
         f"Save working proxies to input file (y/n) [{('y' if save_to_input_file else 'n')}]: "
@@ -108,6 +128,40 @@ def edit_config(config_file):
         config["save_to_input_file"] = True
     elif save_input.lower() in ["n", "no"]:
         config["save_to_input_file"] = False
+
+    if "speed_filter" not in config:
+        config["speed_filter"] = {"enabled": False, "max_speed": 1000, "min_speed": 0}
+
+    speed_filter = config["speed_filter"]
+    print("\nSpeed Filter Configuration:")
+
+    enable_filter = input(
+        f"Enable speed filter (y/n) [{('y' if speed_filter.get('enabled', False) else 'n')}]: "
+    )
+    if enable_filter.lower() in ["y", "yes"]:
+        speed_filter["enabled"] = True
+
+        try:
+            min_speed = input(
+                f"Minimum acceptable speed in ms [{speed_filter.get('min_speed', 0)}]: "
+            )
+            if min_speed:
+                speed_filter["min_speed"] = int(min_speed)
+        except ValueError:
+            print("Invalid speed format. Using the previous value.")
+
+        try:
+            max_speed = input(
+                f"Maximum acceptable speed in ms [{speed_filter.get('max_speed', 1000)}]: "
+            )
+            if max_speed:
+                speed_filter["max_speed"] = int(max_speed)
+        except ValueError:
+            print("Invalid speed format. Using the previous value.")
+    elif enable_filter.lower() in ["n", "no"]:
+        speed_filter["enabled"] = False
+
+    config["speed_filter"] = speed_filter
 
     if save_config(config, config_file):
         print("Configuration successfully updated!")

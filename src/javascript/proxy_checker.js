@@ -25,10 +25,22 @@ function loadConfig(configPath = path.join("config", "config.json")) {
         return {
             proxy_file: "data/proxy.txt",
             output_file: "data/working_proxies.txt",
-            test_url: "http://www.google.com",
+            test_urls: [
+                "https://www.google.com",
+                "https://www.cloudflare.com",
+                "https://www.microsoft.com",
+                "https://www.amazon.com",
+                "https://www.github.com",
+            ],
             timeout: 5,
             concurrent_checks: 20,
             save_to_input_file: false,
+            retry_count: 1,
+            speed_filter: {
+                enabled: false,
+                max_speed: 1000,
+                min_speed: 0,
+            },
         };
     }
 }
@@ -91,10 +103,12 @@ const config = loadConfig(configPath);
 
 const PROXY_FILE = path.join("data", path.basename(config.proxy_file));
 const OUTPUT_FILE = path.join("data", path.basename(config.output_file));
-const TEST_URL = config.test_url;
+const TEST_URLS = config.test_urls;
 const TIMEOUT = config.timeout * 1000;
 const CONCURRENT_CHECKS = config.concurrent_checks;
 const SAVE_TO_INPUT_FILE = config.save_to_input_file;
+const RETRY_COUNT = config.retry_count || 1;
+const SPEED_FILTER = config.speed_filter || { enabled: false, max_speed: 1000, min_speed: 0 };
 
 const dataDir = path.join(getProjectRoot(), "data");
 if (!fs.existsSync(dataDir)) {
@@ -116,24 +130,43 @@ function timeout(ms) {
     return new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms));
 }
 
+function randomUrl() {
+    return TEST_URLS[Math.floor(Math.random() * TEST_URLS.length)];
+}
+
 async function checkHttpProxy(proxyInfo) {
     return new Promise(async (resolve) => {
         try {
             const proxyUrl = proxyInfo.toString();
             const agent = new HttpsProxyAgent(proxyUrl);
+            const startTime = Date.now();
 
-            const result = await Promise.race([
-                fetch(TEST_URL, {
-                    agent,
-                    timeout: TIMEOUT,
-                    method: "HEAD",
-                }),
-                timeout(TIMEOUT),
-            ]);
+            // Use random URL instead of testing all URLs
+            const url = randomUrl();
+            try {
+                const fetchResult = await Promise.race([
+                    fetch(url, {
+                        agent,
+                        timeout: TIMEOUT,
+                        method: "HEAD",
+                    }),
+                    timeout(TIMEOUT),
+                ]);
 
-            resolve(result.ok);
+                const responseTime = Date.now() - startTime;
+                const working = fetchResult.ok;
+
+                resolve({
+                    working,
+                    successRate: working ? 1 : 0,
+                    speed: working ? responseTime : null,
+                });
+            } catch (error) {
+                console.debug(`Error testing ${url} with proxy ${proxyUrl}: ${error.message}`);
+                resolve({ working: false, successRate: 0, speed: null });
+            }
         } catch (error) {
-            resolve(false);
+            resolve({ working: false, successRate: 0, speed: null });
         }
     });
 }
@@ -143,40 +176,64 @@ async function checkSocksProxy(proxyInfo) {
         try {
             const proxyUrl = proxyInfo.toString();
             const agent = new SocksProxyAgent(proxyUrl);
+            const startTime = Date.now();
 
-            const result = await Promise.race([
-                fetch(TEST_URL, {
-                    agent,
-                    timeout: TIMEOUT,
-                    method: "HEAD",
-                }),
-                timeout(TIMEOUT),
-            ]);
+            const url = randomUrl();
+            try {
+                const fetchResult = await Promise.race([
+                    fetch(url, {
+                        agent,
+                        timeout: TIMEOUT,
+                        method: "HEAD",
+                    }),
+                    timeout(TIMEOUT),
+                ]);
 
-            resolve(result.ok);
+                const responseTime = Date.now() - startTime;
+                const working = fetchResult.ok;
+
+                resolve({
+                    working,
+                    successRate: working ? 1 : 0,
+                    speed: working ? responseTime : null,
+                });
+            } catch (error) {
+                console.debug(`Error testing ${url} with proxy ${proxyUrl}: ${error.message}`);
+                resolve({ working: false, successRate: 0, speed: null });
+            }
         } catch (error) {
-            resolve(false);
+            resolve({ working: false, successRate: 0, speed: null });
         }
     });
 }
 
+function validateProxyString(proxyStr) {
+    const regex = /^(https?|socks[45])?(:\/{2})?([^:@]+:)?([^@]+@)?([^:]+)(:\d+)$/i;
+    return regex.test(proxyStr);
+}
+
 async function checkProxy(proxyStr) {
     try {
+        if (!validateProxyString(proxyStr)) {
+            console.log(`❌ Invalid proxy format: ${proxyStr}`);
+            return { working: false, successRate: 0, speed: null, proxy: proxyStr };
+        }
+
         const proxyInfo = parseProxyString(proxyStr);
 
         switch (proxyInfo.protocol) {
             case "http":
             case "https":
-                return await checkHttpProxy(proxyInfo);
+                return { ...(await checkHttpProxy(proxyInfo)), proxy: proxyStr };
             case "socks4":
             case "socks5":
-                return await checkSocksProxy(proxyInfo);
+                return { ...(await checkSocksProxy(proxyInfo)), proxy: proxyStr };
             default:
                 proxyInfo.protocol = "http";
-                return await checkHttpProxy(proxyInfo);
+                return { ...(await checkHttpProxy(proxyInfo)), proxy: proxyStr };
         }
     } catch (error) {
-        return false;
+        return { working: false, successRate: 0, speed: null, proxy: proxyStr };
     }
 }
 
@@ -210,31 +267,60 @@ async function processProxiesInBatches(proxies) {
     const workingProxies = [];
     const totalProxies = proxies.length;
     let processedCount = 0;
+    const MAX_RETRIES = RETRY_COUNT;
+
+    const retryMap = new Map();
 
     console.log(`Starting proxy check of ${totalProxies} proxies...`);
+    function drawProgressBar(current, total, barLength = 30) {
+        const progress = Math.round((current / total) * barLength);
+        const progressBar = "█".repeat(progress) + "░".repeat(barLength - progress);
+        const percentage = Math.round((current / total) * 100);
+        return `[${progressBar}] ${current}/${total} (${percentage}%)`;
+    }
 
-    const checkWithSem = async (proxy) => {
+    const checkWithSem = async (proxy, retryCount = 0) => {
         try {
             await sem.acquire();
-            const isWorking = await Promise.race([checkProxy(proxy), timeout(TIMEOUT * 2)]);
+            const result = await Promise.race([checkProxy(proxy), timeout(TIMEOUT * 2)]);
 
             processedCount++;
-            if (processedCount % 10 === 0 || processedCount === totalProxies) {
-                console.log(
-                    `Progress: ${processedCount}/${totalProxies} (${Math.round(
-                        (processedCount / totalProxies) * 100
-                    )}%)`
-                );
+            if (processedCount % 5 === 0 || processedCount === totalProxies) {
+                const progressBar = drawProgressBar(processedCount, totalProxies);
+                console.log(progressBar);
             }
 
-            if (isWorking) {
-                console.log(`✅ Working: ${proxy}`);
-                workingProxies.push(proxy);
+            if (result.working) {
+                if (SPEED_FILTER.enabled && result.speed !== null) {
+                    if (result.speed < SPEED_FILTER.min_speed || result.speed > SPEED_FILTER.max_speed) {
+                        console.log(
+                            `❌ Filtered: ${proxy} | Speed: ${result.speed}ms (outside range ${SPEED_FILTER.min_speed}-${SPEED_FILTER.max_speed}ms)`
+                        );
+                        return false;
+                    }
+                }
+
+                const speedCategory = result.speed ? categorizeSpeed(result.speed) : "unknown";
+                const successPercent = Math.round(result.successRate * 100);
+                console.log(
+                    `✅ Working: ${proxy} | Speed: ${
+                        result.speed || "N/A"
+                    }ms (${speedCategory}) | Success: ${successPercent}%`
+                );
+                workingProxies.push({
+                    proxy,
+                    speed: result.speed,
+                    successRate: result.successRate,
+                    category: speedCategory,
+                });
+            } else if (retryCount < MAX_RETRIES) {
+                console.log(`⚠️ Retry (${retryCount + 1}/${MAX_RETRIES}): ${proxy}`);
+                retryMap.set(proxy, retryCount + 1);
             } else {
                 console.log(`❌ Failed: ${proxy}`);
             }
 
-            return isWorking;
+            return result.working;
         } catch (error) {
             processedCount++;
             console.log(`❌ Timeout: ${proxy}`);
@@ -244,26 +330,49 @@ async function processProxiesInBatches(proxies) {
         }
     };
 
+    function categorizeSpeed(speed) {
+        if (speed < 500) return "fast";
+        if (speed < 1000) return "medium";
+        return "slow";
+    }
+
     const batchSize = CONCURRENT_CHECKS;
     for (let i = 0; i < proxies.length; i += batchSize) {
         const batch = proxies.slice(i, i + batchSize);
         try {
-            await Promise.race([Promise.all(batch.map(checkWithSem)), timeout(TIMEOUT * 3)]);
+            await Promise.race([Promise.all(batch.map((proxy) => checkWithSem(proxy))), timeout(TIMEOUT * 3)]);
         } catch (error) {
             console.log(`Batch timeout, moving to next batch...`);
             continue;
         }
     }
 
-    return workingProxies;
+    const retriesToProcess = Array.from(retryMap.entries()).filter(([_, count]) => count <= MAX_RETRIES);
+
+    if (retriesToProcess.length > 0) {
+        console.log(`\nRetrying ${retriesToProcess.length} proxies...`);
+        for (const [proxy, retryCount] of retriesToProcess) {
+            await checkWithSem(proxy, retryCount);
+        }
+    }
+
+    return {
+        proxyStrings: workingProxies.map((p) => p.proxy),
+        proxyObjects: workingProxies,
+    };
 }
 
 function saveWorkingProxies(proxies, filePath) {
     try {
         const fullPath = getFilePath(filePath);
         fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-        fs.writeFileSync(fullPath, proxies.join("\n"));
-        console.log(`✅ Saved ${proxies.length} working proxies to ${filePath}`);
+
+        const jsonFilePath = fullPath.replace(/\.[^.]+$/, ".json");
+        fs.writeFileSync(jsonFilePath, JSON.stringify(proxies.proxyObjects, null, 2));
+        console.log(`✅ Saved detailed proxy data to ${jsonFilePath}`);
+
+        fs.writeFileSync(fullPath, proxies.proxyStrings.join("\n"));
+        console.log(`✅ Saved ${proxies.proxyStrings.length} working proxies to ${filePath}`);
     } catch (error) {
         console.error(`Error saving working proxies: ${error.message}`);
     }
@@ -274,10 +383,17 @@ async function main() {
     console.log(`Using configuration from file: ${configPath}`);
     console.log(`Proxy file: ${PROXY_FILE}`);
     console.log(`Output file: ${OUTPUT_FILE}`);
-    console.log(`URL for testing: ${TEST_URL}`);
+    console.log(`URLs for testing: ${TEST_URLS.join(", ")}`);
     console.log(`Timeout: ${TIMEOUT / 1000} seconds`);
     console.log(`Number of concurrent checks: ${CONCURRENT_CHECKS}`);
     console.log(`Save to input file: ${SAVE_TO_INPUT_FILE ? "Yes" : "No"}`);
+    console.log(`Retry count: ${RETRY_COUNT}`);
+
+    if (SPEED_FILTER.enabled) {
+        console.log(`Speed filter: Enabled (${SPEED_FILTER.min_speed}ms - ${SPEED_FILTER.max_speed}ms)`);
+    } else {
+        console.log(`Speed filter: Disabled`);
+    }
 
     const proxies = readProxiesFromFile(PROXY_FILE);
     console.log(`Loaded ${proxies.length} proxies from file ${PROXY_FILE}`);
@@ -291,8 +407,18 @@ async function main() {
 
     console.log(`\nResults of the check:`);
     console.log(`Total proxies: ${proxies.length}`);
-    console.log(`Working proxies: ${workingProxies.length}`);
-    console.log(`Not working proxies: ${proxies.length - workingProxies.length}`);
+    console.log(`Working proxies: ${workingProxies.proxyStrings.length}`);
+    console.log(`Not working proxies: ${proxies.length - workingProxies.proxyStrings.length}`);
+
+    const categories = workingProxies.proxyObjects.reduce((acc, p) => {
+        acc[p.category] = (acc[p.category] || 0) + 1;
+        return acc;
+    }, {});
+
+    console.log("\nProxy Speed Categories:");
+    Object.entries(categories).forEach(([category, count]) => {
+        console.log(`- ${category}: ${count} proxies`);
+    });
 
     if (SAVE_TO_INPUT_FILE) {
         console.log(`Saving working proxies to input file: ${PROXY_FILE}`);

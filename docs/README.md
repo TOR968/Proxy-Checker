@@ -84,9 +84,13 @@ The program includes several optimizations for faster proxy checking:
 
 -   Uses HEAD requests instead of GET
 -   Supports up to 50 concurrent checks
--   Implements timeout control (3 seconds by default)
--   Uses lightweight test URL (httpbin.org/status/200)
+-   Implements timeout control (configurable, 5 seconds by default)
+-   Uses random testing URL from configurable list
 -   Includes detailed status logging for each proxy
+-   Measures proxy response speed and categorizes by performance
+-   Filters proxies based on speed requirements
+-   Implements retry mechanism for potentially working proxies (configurable)
+-   Visual progress bar for better monitoring
 
 ## Configuration Settings
 
@@ -94,12 +98,25 @@ Default configuration (`config/config.json`):
 
 ```json
 {
+    "proxy_url": "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt",
     "proxy_file": "proxy.txt",
     "output_file": "working_proxies.txt",
-    "test_url": "http://httpbin.org/status/200",
-    "timeout": 3,
-    "concurrent_checks": 50,
-    "save_to_input_file": false
+    "test_urls": [
+        "https://www.google.com",
+        "https://www.cloudflare.com",
+        "https://www.microsoft.com",
+        "https://www.amazon.com",
+        "https://www.github.com"
+    ],
+    "timeout": 5,
+    "concurrent_checks": 10,
+    "save_to_input_file": true,
+    "retry_count": 1,
+    "speed_filter": {
+        "enabled": false,
+        "max_speed": 1000,
+        "min_speed": 0
+    }
 }
 ```
 
@@ -229,14 +246,62 @@ or
 node src/javascript/proxy_checker.js -c config/my_config.json
 ```
 
-## Status Indicators
+## Output and Status Indicators
 
 The program uses the following indicators:
 
--   ✅ Working: Proxy is working
--   ❌ Failed: Proxy is not working
--   ❌ Timeout: Proxy did not respond in time
--   Progress percentage is shown every 10 proxies
+-   Working: `proxy_url | Speed: Xms (fast/medium/slow) | Success: X%`
+-   Failed: Proxy is not working
+-   Timeout: Proxy did not respond in time
+-   Filtered: Proxy speed is outside configured range
+-   Retry: Proxy will be retried once
+-   Visual progress bar showing completion percentage
+
+### Speed Categories
+
+Proxies are automatically categorized by speed:
+- Fast: < 500ms
+- Medium: 500ms - 1000ms
+- Slow: > 1000ms
+
+### Output Files
+
+The program generates two output files:
+1. A text file with proxy strings (e.g., `working_proxies.txt`)
+2. A JSON file with detailed information about each proxy including speed, success rate, and category (e.g., `working_proxies.json`)
+
+## Retry Mechanism
+
+You can configure how many times failed proxies should be retried using the `retry_count` parameter:
+
+```json
+"retry_count": 2
+```
+
+Setting this to:
+- `0`: No retries, proxies that fail once are discarded
+- `1`: Retry once (default)
+- `2` or higher: Retry multiple times before discarding
+
+This is useful for proxies that may fail due to temporary network issues.
+
+## Speed Filtering
+
+You can filter proxies based on their response speed by configuring the speed filter:
+
+```json
+"speed_filter": {
+    "enabled": true,
+    "max_speed": 800,
+    "min_speed": 0
+}
+```
+
+- `enabled`: Whether to filter by speed (true/false)
+- `max_speed`: Maximum acceptable speed in milliseconds
+- `min_speed`: Minimum acceptable speed in milliseconds
+
+For example, to keep only fast proxies, set `max_speed` to 500.
 
 ## Project structure
 
